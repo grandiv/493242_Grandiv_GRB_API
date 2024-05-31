@@ -3,14 +3,26 @@ const controller = require("./controller");
 
 const router = Router();
 
-router.get("/books", controller.getBooks);
+// POST Method (Create)
 router.post("/books", controller.addBook);
-router.get("/books/:id", controller.getBooksByID);
-router.put("/books/:id", controller.updateBook);
-router.delete("/books/:id", controller.removeBook);
-router.get("/format/:id", controller.getBooksByFormat);
 router.post("/account/:customerId/wishlist", controller.addWishlist);
+router.post("/book-query", controller.buildQuery);
+
+// GET Method (Read)
+router.get("/books", controller.getBooks);
+router.get("/books/:id", controller.getBooksByID);
+router.get("/format/:id", controller.getBooksByFormat);
 router.get("/account/:customerId/wishlist", controller.getWishlistBooks);
-router.get("/search", controller.searchBooks);
+router.get("/book-search", controller.searchBooks);
+
+// PUT Method (Update)
+router.put("/books/:id", controller.updateBook);
+
+// DELETE Method (Delete)
+router.delete("/books/:id", controller.removeBook);
+router.delete(
+  "/account/:customerId/wishlist",
+  controller.removeBookFromWishlist
+);
 
 module.exports = router;

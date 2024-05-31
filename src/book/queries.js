@@ -44,6 +44,14 @@ const getWishlistBooksByCustomerID = `
 // Search Books by Keywords
 const searchBooksByKeywords = `SELECT * FROM "Book" WHERE "BookName" ILIKE '%' || $1 || '%' ORDER BY "BookID" ASC`;
 
+// Remove Book from Wishlist
+const removeBookFromWishlist =
+  'DELETE FROM "Wishlist_Book" WHERE "WishlistID" = $1 AND "BookID" = $2';
+const getBookInWishlist = `
+  SELECT * FROM "Wishlist_Book" 
+  WHERE "WishlistID" = $1 AND "BookID" = $2
+`;
+
 module.exports = {
   getBooks,
   getBooksByID,
@@ -57,4 +65,6 @@ module.exports = {
   addBookToWishlist,
   getWishlistBooksByCustomerID,
   searchBooksByKeywords,
+  removeBookFromWishlist,
+  getBookInWishlist,
 };

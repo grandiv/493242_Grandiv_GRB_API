@@ -142,6 +142,49 @@ const addWishlist = (req, res) => {
   );
 };
 
+// Remove Book from Wishlist
+const removeBookFromWishlist = (req, res) => {
+  const customerId = parseInt(req.params.customerId);
+  const { BookID } = req.body;
+
+  // Check if the customer's wishlist exists
+  pool.query(
+    queries.getWishlistByCustomerID,
+    [customerId],
+    (error, results) => {
+      if (error) throw error;
+
+      if (!results.rows.length) {
+        return res
+          .status(404)
+          .send("Wishlist does not exist for this customer");
+      }
+      const wishlistID = results.rows[0].WishlistID;
+
+      pool.query(
+        queries.getBookInWishlist,
+        [wishlistID, BookID],
+        (error, results) => {
+          if (error) throw error;
+
+          if (!results.rows.length) {
+            return res.status(404).send("Book does not exist in the wishlist");
+          }
+          // Remove book from wishlist
+          pool.query(
+            queries.removeBookFromWishlist,
+            [wishlistID, BookID],
+            (error, results) => {
+              if (error) throw error;
+              res.status(200).send("Book removed from wishlist successfully!");
+            }
+          );
+        }
+      );
+    }
+  );
+};
+
 // Get Wishlist Books for a Customer
 const getWishlistBooks = (req, res) => {
   const customerId = parseInt(req.params.customerId);
@@ -172,6 +215,69 @@ const searchBooks = (req, res) => {
   });
 };
 
+// Dynamic SQL Query Builder
+// --> Constructs and executes SQL queries based on user input
+const buildQuery = (req, res) => {
+  const { filters, sort, limit, offset } = req.body;
+  // Query base
+  let query = 'SELECT * FROM "Book"';
+  let queryParams = [];
+  let queryConditions = [];
+
+  // Filters Query
+  if (filters) {
+    Object.keys(filters).forEach((key, index) => {
+      if (typeof filters[key] === "object") {
+        Object.keys(filters[key]).forEach((condition) => {
+          let paramIndex = queryParams.length + 1;
+          switch (condition) {
+            case "gte":
+              queryConditions.push(`"${key}" >= $${paramIndex}`);
+              queryParams.push(filters[key][condition]);
+              break;
+            case "lte":
+              queryConditions.push(`"${key}" <= $${paramIndex}`);
+              queryParams.push(filters[key][condition]);
+              break;
+          }
+        });
+      } else {
+        let paramIndex = queryParams.length + 1;
+        queryConditions.push(`"${key}" = $${paramIndex}`);
+        queryParams.push(filters[key]);
+      }
+    });
+  }
+
+  // Combine conditions with WHERE clause
+  if (queryConditions.length > 0) {
+    query += ` WHERE ${queryConditions.join(" AND ")}`;
+  }
+
+  // Sort Query
+  if (sort) {
+    query += ` ORDER BY "${sort.column}" ${sort.direction}`;
+  }
+
+  // Limit Query
+  if (limit) {
+    queryParams.push(limit);
+    query += ` LIMIT $${queryParams.length}`;
+  }
+
+  // Offset Query
+  if (offset) {
+    queryParams.push(offset);
+    query += ` OFFSET $${queryParams.length}`;
+  }
+
+  // Execute the Built Query
+  pool.query(query, queryParams, (error, results) => {
+    if (error) throw error;
+    res.status(200).json(results.rows);
+  });
+};
+
 module.exports = {
   getBooks,
   getBooksByID,
@@ -180,6 +286,8 @@ module.exports = {
   updateBook,
   getBooksByFormat,
   addWishlist,
+  removeBookFromWishlist,
   getWishlistBooks,
   searchBooks,
+  buildQuery,
 };
