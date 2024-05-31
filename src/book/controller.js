@@ -105,7 +105,7 @@ const getBooksByFormat = (req, res) => {
 // Add Book to Wishlist
 const addWishlist = (req, res) => {
   const customerId = parseInt(req.params.customerId);
-  const { BookID } = req.body;
+  const bookId = parseInt(req.params.bookId);
 
   // Check if customer has already a wishlist
   pool.query(
@@ -132,7 +132,7 @@ const addWishlist = (req, res) => {
       // Add book to wishlist
       pool.query(
         queries.addBookToWishlist,
-        [wishlistID, BookID, new Date()],
+        [wishlistID, bookId, new Date()],
         (error, results) => {
           if (error) throw error;
           res.status(201).send("Book added to wishlist successfully!");
@@ -145,7 +145,7 @@ const addWishlist = (req, res) => {
 // Remove Book from Wishlist
 const removeBookFromWishlist = (req, res) => {
   const customerId = parseInt(req.params.customerId);
-  const { BookID } = req.body;
+  const bookId = parseInt(req.params.bookId);
 
   // Check if the customer's wishlist exists
   pool.query(
@@ -163,7 +163,7 @@ const removeBookFromWishlist = (req, res) => {
 
       pool.query(
         queries.getBookInWishlist,
-        [wishlistID, BookID],
+        [wishlistID, bookId],
         (error, results) => {
           if (error) throw error;
 
@@ -173,7 +173,7 @@ const removeBookFromWishlist = (req, res) => {
           // Remove book from wishlist
           pool.query(
             queries.removeBookFromWishlist,
-            [wishlistID, BookID],
+            [wishlistID, bookId],
             (error, results) => {
               if (error) throw error;
               res.status(200).send("Book removed from wishlist successfully!");
@@ -278,6 +278,138 @@ const buildQuery = (req, res) => {
   });
 };
 
+// TCL: Add Multiple Books to Wishlist with Transaction
+const addMultipleBooksToWishlist = (req, res) => {
+  const customerId = parseInt(req.params.customerId);
+  const { bookIds } = req.body;
+
+  pool.connect((err, client, done) => {
+    if (err) throw err;
+
+    const handleError = (err) => {
+      done();
+      console.error(err);
+      res.status(500).send("The book is already in wishlist!");
+    };
+
+    // Start transaction
+    client.query("BEGIN", (err) => {
+      if (err) return handleError(err);
+
+      // Check if the customer's wishlist exists
+      client.query(
+        queries.getWishlistByCustomerID,
+        [customerId],
+        (err, results) => {
+          if (err) return handleError(err);
+
+          let wishlistID;
+          if (results.rows.length) {
+            wishlistID = results.rows[0].WishlistID;
+          } else {
+            // Create a new wishlist for the customer
+            client.query(
+              queries.createWishlist,
+              [customerId, new Date()],
+              (err, results) => {
+                if (err) return handleError(err);
+                wishlistID = results.rows[0].WishlistID;
+              }
+            );
+          }
+
+          // Add books to wishlist
+          const addBookPromises = bookIds.map((bookId) =>
+            client.query(queries.addBookToWishlist, [
+              wishlistID,
+              bookId,
+              new Date(),
+            ])
+          );
+
+          Promise.all(addBookPromises)
+            .then(() => {
+              // Commit transaction
+              client.query("COMMIT", (err) => {
+                if (err) return handleError(err);
+                done();
+                res.status(201).send("Books added to wishlist successfully!");
+              });
+            })
+            .catch((err) => {
+              // Rollback transaction
+              client.query("ROLLBACK", (err) => {
+                if (err) return handleError(err);
+                handleError(err);
+              });
+            });
+        }
+      );
+    });
+  });
+};
+
+// TCL: Add Multiple New Books with Transaction
+const addMultipleNewBooks = (req, res) => {
+  const { books } = req.body; // `books` should be an array of book objects
+
+  pool.connect((err, client, done) => {
+    if (err) throw err;
+
+    const handleError = (err) => {
+      done();
+      console.error(err);
+      res.status(500).send("An error occurred");
+    };
+
+    // Start transaction
+    client.query("BEGIN", (err) => {
+      if (err) return handleError(err);
+
+      const addBookPromises = books.map((book) => {
+        const {
+          BookName,
+          ISBN,
+          PublicationYear,
+          Pages,
+          BookPrice,
+          PublisherID,
+          LanguageID,
+          BookFormatID,
+        } = book;
+
+        return client.query(queries.addBook, [
+          BookName,
+          ISBN,
+          PublicationYear,
+          Pages,
+          BookPrice,
+          PublisherID,
+          LanguageID,
+          BookFormatID,
+        ]);
+      });
+
+      Promise.all(addBookPromises)
+        .then(() => {
+          // Commit transaction
+          client.query("COMMIT", (err) => {
+            if (err) return handleError(err);
+            done();
+            res.status(201).send("Books added successfully!");
+          });
+        })
+        .catch((err) => {
+          // Rollback transaction
+          client.query("ROLLBACK", (rollbackErr) => {
+            if (rollbackErr) return handleError(rollbackErr);
+            handleError(err);
+          });
+        });
+    });
+  });
+};
+
 module.exports = {
   getBooks,
   getBooksByID,
@@ -290,4 +422,6 @@ module.exports = {
   getWishlistBooks,
   searchBooks,
   buildQuery,
+  addMultipleBooksToWishlist,
+  addMultipleNewBooks,
 };
