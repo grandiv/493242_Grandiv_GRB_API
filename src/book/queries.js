@@ -21,6 +21,29 @@ const updateBook = 'UPDATE "Book" SET "BookPrice" = $1 WHERE "BookID" = $2';
 const getBooksByFormat =
   'SELECT * FROM "Book" WHERE "BookFormatID" = $1 ORDER BY "BookID" ASC';
 
+// Get Wishlist by CustomerID
+const getWishlistByCustomerID =
+  'SELECT * FROM "Wishlist" WHERE "CustomerID" = $1';
+
+// Create Wishlist for Customer
+const createWishlist =
+  'INSERT INTO "Wishlist" ("CustomerID", "BookID") VALUES ($1, $2) RETURNING "WishlistID"';
+
+// Add Book to Wishlist
+const addBookToWishlist =
+  'INSERT INTO "Wishlist_Book" ("WishlistID", "BookID", "AddedAt") VALUES ($1, $2, $3)';
+
+// Get Wishlist Books by CustomerID
+const getWishlistBooksByCustomerID = `
+  SELECT w."WishlistID", wb."BookID", wb."AddedAt"
+  FROM "Wishlist" w
+  JOIN "Wishlist_Book" wb ON w."WishlistID" = wb."WishlistID"
+  WHERE w."CustomerID" = $1
+`;
+
+// Search Books by Keywords
+const searchBooksByKeywords = `SELECT * FROM "Book" WHERE "BookName" ILIKE '%' || $1 || '%' ORDER BY "BookID" ASC`;
+
 module.exports = {
   getBooks,
   getBooksByID,
@@ -29,4 +52,9 @@ module.exports = {
   removeBook,
   updateBook,
   getBooksByFormat,
+  getWishlistByCustomerID,
+  createWishlist,
+  addBookToWishlist,
+  getWishlistBooksByCustomerID,
+  searchBooksByKeywords,
 };

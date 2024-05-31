@@ -9,6 +9,8 @@ router.get("/books/:id", controller.getBooksByID);
 router.put("/books/:id", controller.updateBook);
 router.delete("/books/:id", controller.removeBook);
 router.get("/format/:id", controller.getBooksByFormat);
-// router.post("/account/wishlist", controller.addWishlist);
+router.post("/account/:customerId/wishlist", controller.addWishlist);
+router.get("/account/:customerId/wishlist", controller.getWishlistBooks);
+router.get("/search", controller.searchBooks);
 
 module.exports = router;
