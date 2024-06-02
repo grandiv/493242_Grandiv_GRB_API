@@ -22,6 +22,7 @@ router.get("/book-search", controller.searchBooks);
 
 // PUT Method (Update)
 router.put("/books/:id", controller.updateBook);
+router.put("/bookprices/", controller.updateMultipleBookPrices);
 
 // DELETE Method (Delete)
 router.delete("/books/:id", controller.removeBook);

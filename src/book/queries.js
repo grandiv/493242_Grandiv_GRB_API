@@ -52,6 +52,10 @@ const getBookInWishlist = `
   WHERE "WishlistID" = $1 AND "BookID" = $2
 `;
 
+// Update Book Prices
+const updateBookPrice =
+  'UPDATE "Book" SET "BookPrice" = $1 WHERE "BookID" = $2';
+
 module.exports = {
   getBooks,
   getBooksByID,
@@ -67,4 +71,5 @@ module.exports = {
   searchBooksByKeywords,
   removeBookFromWishlist,
   getBookInWishlist,
+  updateBookPrice,
 };

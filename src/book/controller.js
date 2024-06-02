@@ -410,6 +410,46 @@ const addMultipleNewBooks = (req, res) => {
   });
 };
 
+const updateMultipleBookPrices = (req, res) => {
+  const { bookPrices } = req.body;
+
+  pool.connect((err, client, done) => {
+    if (err) throw err;
+
+    const handleError = (err) => {
+      done();
+      console.error(err);
+      res.status(500).send("An error occurred");
+    };
+
+    // Start transaction
+    client.query("BEGIN", (err) => {
+      if (err) return handleError(err);
+
+      const updatePricePromises = bookPrices.map(({ bookId, newPrice }) =>
+        client.query(queries.updateBook, [newPrice, bookId])
+      );
+
+      Promise.all(updatePricePromises)
+        .then(() => {
+          // Commit transaction
+          client.query("COMMIT", (err) => {
+            if (err) return handleError(err);
+            done();
+            res.status(200).send("Book prices updated successfully!");
+          });
+        })
+        .catch((err) => {
+          // Rollback transaction
+          client.query("ROLLBACK", (rollbackErr) => {
+            if (rollbackErr) return handleError(rollbackErr);
+            handleError(err);
+          });
+        });
+    });
+  });
+};
+
 module.exports = {
   getBooks,
   getBooksByID,
@@ -424,4 +464,5 @@ module.exports = {
   buildQuery,
   addMultipleBooksToWishlist,
   addMultipleNewBooks,
+  updateMultipleBookPrices,
 };
