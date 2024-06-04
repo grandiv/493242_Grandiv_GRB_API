@@ -129,13 +129,26 @@ const addWishlist = (req, res) => {
         );
       }
 
-      // Add book to wishlist
+      // Check if book is already in wishlist before adding
       pool.query(
-        queries.addBookToWishlist,
-        [wishlistID, bookId, new Date()],
+        queries.checkBookInWishlist,
+        [wishlistID, bookId],
         (error, results) => {
           if (error) throw error;
-          res.status(201).send("Book added to wishlist successfully!");
+
+          if (results.rows.length) {
+            res.status(400).send("Book is already in wishlist!");
+          } else {
+            // Add book to wishlist
+            pool.query(
+              queries.addBookToWishlist,
+              [wishlistID, bookId, new Date()],
+              (error, results) => {
+                if (error) throw error;
+                res.status(201).send("Book added to wishlist successfully!");
+              }
+            );
+          }
         }
       );
     }
@@ -320,11 +333,19 @@ const addMultipleBooksToWishlist = (req, res) => {
 
           // Add books to wishlist
           const addBookPromises = bookIds.map((bookId) =>
-            client.query(queries.addBookToWishlist, [
-              wishlistID,
-              bookId,
-              new Date(),
-            ])
+            client
+              .query(queries.checkBookInWishlist, [wishlistID, bookId])
+              .then((results) => {
+                if (results.rows.length) {
+                  res.send(`Book ${bookId} is already in wishlist!`);
+                } else {
+                  return client.query(queries.addBookToWishlist, [
+                    wishlistID,
+                    bookId,
+                    new Date(),
+                  ]);
+                }
+              })
           );
 
           Promise.all(addBookPromises)
@@ -378,16 +399,23 @@ const addMultipleNewBooks = (req, res) => {
           BookFormatID,
         } = book;
 
-        return client.query(queries.addBook, [
-          BookName,
-          ISBN,
-          PublicationYear,
-          Pages,
-          BookPrice,
-          PublisherID,
-          LanguageID,
-          BookFormatID,
-        ]);
+        // Check if ISBN exists before adding book
+        return client.query(queries.checkISBNExists, [ISBN]).then((results) => {
+          if (results.rows.length) {
+            res.send(`ISBN ${ISBN} already exists!`);
+          } else {
+            return client.query(queries.addBook, [
+              BookName,
+              ISBN,
+              PublicationYear,
+              Pages,
+              BookPrice,
+              PublisherID,
+              LanguageID,
+              BookFormatID,
+            ]);
+          }
+        });
       });
 
       Promise.all(addBookPromises)
@@ -410,6 +438,7 @@ const addMultipleNewBooks = (req, res) => {
   });
 };
 
+// Update Multiple Book Prices with Transaction
 const updateMultipleBookPrices = (req, res) => {
   const { bookPrices } = req.body;
 

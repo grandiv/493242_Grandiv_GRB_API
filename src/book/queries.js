@@ -56,6 +56,10 @@ const getBookInWishlist = `
 const updateBookPrice =
   'UPDATE "Book" SET "BookPrice" = $1 WHERE "BookID" = $2';
 
+// Check if Book is in Wishlist
+const checkBookInWishlist =
+  'SELECT * FROM "Wishlist_Book" WHERE "WishlistID" = $1 AND "BookID" = $2';
+
 module.exports = {
   getBooks,
   getBooksByID,
@@ -72,4 +76,5 @@ module.exports = {
   removeBookFromWishlist,
   getBookInWishlist,
   updateBookPrice,
+  checkBookInWishlist,
 };
