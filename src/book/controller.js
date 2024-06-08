@@ -30,6 +30,8 @@ const addBook = (req, res) => {
     PublisherID,
     LanguageID,
     BookFormatID,
+    StoreID,
+    Stock,
   } = req.body;
 
   // Check if ISBN exists
@@ -52,7 +54,42 @@ const addBook = (req, res) => {
         ],
         (error, results) => {
           if (error) throw error;
-          res.status(201).send("Book added successfully!");
+
+          const BookID = results.rows[0].BookID;
+          // Check if book already exists in inventory
+          pool.query(
+            queries.checkBookInInventory,
+            [BookID, StoreID],
+            (error, results) => {
+              if (error) throw error;
+
+              if (results.rows.length) {
+                // Update stock in inventory
+                pool.query(
+                  queries.updateInventory,
+                  [Stock, BookID, StoreID],
+                  (error, results) => {
+                    if (error) throw error;
+                    res
+                      .status(201)
+                      .send("Book added and inventory updated successfully!");
+                  }
+                );
+              } else {
+                // Add book to inventory
+                pool.query(
+                  queries.addBookToInventory,
+                  [BookID, StoreID, Stock],
+                  (error, results) => {
+                    if (error) throw error;
+                    res
+                      .status(201)
+                      .send("Book and inventory added successfully!");
+                  }
+                );
+              }
+            }
+          );
         }
       );
     }
@@ -370,7 +407,6 @@ const addMultipleBooksToWishlist = (req, res) => {
   });
 };
 
-// TCL: Add Multiple New Books with Transaction
 const addMultipleNewBooks = (req, res) => {
   const { books } = req.body; // `books` should be an array of book objects
 
@@ -378,62 +414,112 @@ const addMultipleNewBooks = (req, res) => {
     if (err) throw err;
 
     const handleError = (err) => {
-      done();
-      console.error(err);
-      res.status(500).send("An error occurred");
+      client.query("ROLLBACK", (rollbackErr) => {
+        done();
+        if (rollbackErr) {
+          console.error("Error rolling back transaction", rollbackErr);
+        }
+        console.error("Error in transaction", err);
+        res.status(500).send("An error occurred");
+      });
     };
 
     // Start transaction
     client.query("BEGIN", (err) => {
       if (err) return handleError(err);
 
-      const addBookPromises = books.map((book) => {
-        const {
-          BookName,
-          ISBN,
-          PublicationYear,
-          Pages,
-          BookPrice,
-          PublisherID,
-          LanguageID,
-          BookFormatID,
-        } = book;
+      const processBook = (book) => {
+        return new Promise((resolve, reject) => {
+          const {
+            BookName,
+            ISBN,
+            PublicationYear,
+            Pages,
+            BookPrice,
+            PublisherID,
+            LanguageID,
+            BookFormatID,
+            StoreID,
+            Stock,
+          } = book;
 
-        // Check if ISBN exists before adding book
-        return client.query(queries.checkISBNExists, [ISBN]).then((results) => {
-          if (results.rows.length) {
-            res.send(`ISBN ${ISBN} already exists!`);
-          } else {
-            return client.query(queries.addBook, [
-              BookName,
-              ISBN,
-              PublicationYear,
-              Pages,
-              BookPrice,
-              PublisherID,
-              LanguageID,
-              BookFormatID,
-            ]);
-          }
+          // Check if ISBN exists before adding book
+          client.query(queries.checkISBNExists, [ISBN], (err, results) => {
+            if (err) return reject(err);
+
+            if (results.rows.length) {
+              return reject(new Error(`ISBN ${ISBN} already exists!`));
+            }
+
+            client.query(
+              queries.addBook,
+              [
+                BookName,
+                ISBN,
+                PublicationYear,
+                Pages,
+                BookPrice,
+                PublisherID,
+                LanguageID,
+                BookFormatID,
+              ],
+              (err, results) => {
+                if (err) return reject(err);
+
+                const BookID = results.rows[0].BookID;
+
+                client.query(
+                  queries.checkBookInInventory,
+                  [BookID, StoreID],
+                  (err, results) => {
+                    if (err) return reject(err);
+
+                    if (results.rows.length) {
+                      client.query(
+                        queries.updateInventory,
+                        [Stock, BookID, StoreID],
+                        (err, results) => {
+                          if (err) return reject(err);
+                          resolve();
+                        }
+                      );
+                    } else {
+                      client.query(
+                        queries.addBookToInventory,
+                        [BookID, StoreID, Stock],
+                        (err, results) => {
+                          if (err) return reject(err);
+                          resolve();
+                        }
+                      );
+                    }
+                  }
+                );
+              }
+            );
+          });
         });
-      });
+      };
 
-      Promise.all(addBookPromises)
-        .then(() => {
+      // Use for..of loop to process books sequentially to ensure immediate rollback on error
+      const processBooksSequentially = async () => {
+        try {
+          for (const book of books) {
+            await processBook(book);
+          }
+
           // Commit transaction
           client.query("COMMIT", (err) => {
             if (err) return handleError(err);
             done();
             res.status(201).send("Books added successfully!");
           });
-        })
-        .catch((err) => {
-          // Rollback transaction
-          client.query("ROLLBACK", (rollbackErr) => {
-            if (rollbackErr) return handleError(rollbackErr);
-            handleError(err);
-          });
-        });
+        } catch (err) {
+          handleError(err);
+        }
+      };
+
+      processBooksSequentially();
     });
   });
 };

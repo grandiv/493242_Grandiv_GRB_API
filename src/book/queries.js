@@ -9,10 +9,34 @@ const checkISBNExists = 'SELECT b FROM "Book" b WHERE b."ISBN" = $1';
 
 // Add book
 const addBook =
-  'INSERT INTO "Book" ("BookName", "ISBN", "PublicationYear", "Pages", "BookPrice", "PublisherID", "LanguageID", "BookFormatID") VALUES ($1, $2, $3, $4, $5, $6, $7, $8)';
+  'INSERT INTO "Book" ("BookName", "ISBN", "PublicationYear", "Pages", "BookPrice", "PublisherID", "LanguageID", "BookFormatID") VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING "BookID"';
+
+// Check if book exists in inventory
+const checkBookInInventory =
+  'SELECT * FROM "BookInventory" WHERE "BookID" = $1 AND "StoreID" = $2';
+
+// Update stock in inventory
+const updateInventory =
+  'UPDATE "BookInventory" SET "Stock" = "Stock" + $1 WHERE "BookID" = $2 AND "StoreID" = $3';
+
+// Add book to inventory
+const addBookToInventory =
+  'INSERT INTO "BookInventory" ("BookID", "StoreID", "Stock") VALUES ($1, $2, $3)';
 
 // Remove Book
 const removeBook = 'DELETE FROM "Book" WHERE "BookID" = $1';
+
+// Get all inventory entries for a book
+const getInventoryByBookID =
+  'SELECT * FROM "BookInventory" WHERE "BookID" = $1';
+
+// Update stock in inventory
+const updateInventoryOnRemove =
+  'UPDATE "BookInventory" SET "Stock" = "Stock" - $1 WHERE "BookID" = $2 AND "StoreID" = $3';
+
+// Remove inventory entry if stock is 0
+const removeInventoryEntry =
+  'DELETE FROM "BookInventory" WHERE "BookID" = $1 AND "StoreID" = $2 AND "Stock" <= 0';
 
 // Update Book
 const updateBook = 'UPDATE "Book" SET "BookPrice" = $1 WHERE "BookID" = $2';
@@ -77,4 +101,10 @@ module.exports = {
   getBookInWishlist,
   updateBookPrice,
   checkBookInWishlist,
+  checkBookInInventory,
+  updateInventory,
+  addBookToInventory,
+  getInventoryByBookID,
+  updateInventoryOnRemove,
+  removeInventoryEntry,
 };
